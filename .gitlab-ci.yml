@@ -1,0 +1,236 @@
+---
+include:
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /lint/commit.yml
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /lint/markdown.yml
+    inputs:
+      path: README.md
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /security/authenticate.yml
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /security/gitleaks.yml
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /test/renovate.yml
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /test/trivy.yml
+  - project: sico/shared/ci-templates/gitlab-ci-templates
+    ref: v1.8.1
+    file: /release/semantic.yml
+  - template: Jobs/SAST-IaC.latest.gitlab-ci.yml
+  - template: Terraform/Base.latest.gitlab-ci.yml
+  - template: Workflows/MergeRequest-Pipelines.gitlab-ci.yml
+
+stages:
+  - lint
+  - security
+  - test
+  - validate
+  - build
+  - release
+  - deploy
+
+default:
+  cache:
+    key: "${TF_ROOT}"
+    paths:
+      - ${TF_ROOT}/.cache/terragrunt/providers/
+
+variables:
+  http_proxy: $CODE_PROXY
+  https_proxy: $CODE_PROXY
+  no_proxy: "${CODE_NO_PROXY},captain.rtf.siemens.net"
+  HTTP_PROXY: $CODE_PROXY
+  HTTPS_PROXY: $CODE_PROXY
+  NO_PROXY: "${CODE_NO_PROXY},captain.rtf.siemens.net"
+  IGNORE_TF_DEPRECATION_WARNING: true
+
+.terragrunt: &terragrunt-variables
+  image: devopsinfra/docker-terragrunt:aws-tf-1.9.8-tg-0.68.15
+  variables:
+    TERRAGRUNT_PROVIDER_CACHE: "1"
+    TERRAGRUNT_PROVIDER_CACHE_DIR: "${TF_ROOT}/.cache/terragrunt/providers/"
+
+.terragrunt: &terragrunt-script
+  before_script:
+    - git config --global credential.helper store
+    - echo "https://gitlab-ci-token:${GITLAB_TOKEN}@code.siemens.com" > ~/.git-credentials
+    - git config --global url."https://gitlab-ci-token@code.siemens.com".insteadOf "ssh://git@code.siemens.com"
+
+.terragrunt: &terragrunt-rules
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "**/*.hcl"
+        - "**/*.tf"
+    - if: $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# lint
+commit:
+  extends: .lint:commit
+
+markdown:
+  extends: .lint:markdown
+
+# security
+authenticate:
+  extends: .security:authenticate
+  parallel:
+    matrix:
+      - STACK:
+          - dev
+          - test
+          - prod
+  environment: $STACK
+  cache: {}
+  artifacts:
+    expire_in: 30m
+    reports:
+      dotenv: auth.env
+  <<: *terragrunt-rules
+
+gitleaks:
+  extends: .security:gitleaks
+
+# test
+renovate:config-validator:
+  extends: .renovate:config-validator
+
+trivy:
+  extends: .trivy
+
+# validate
+terragrunt:fmt:
+  extends: .terraform:fmt
+  image: devopsinfra/docker-terragrunt:aws-tf-1.9.8-tg-0.68.15
+  script:
+    - format-hcl
+  <<: *terragrunt-rules
+
+terragrunt:validate:dev:
+  extends: .terraform:validate
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/dev"
+    - terragrunt run-all validate
+  environment:
+    name: dev
+  dependencies:
+    - "authenticate: [dev]"
+  <<: *terragrunt-rules
+
+terragrunt:validate:test:
+  extends: .terraform:validate
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/test"
+    - terragrunt run-all validate
+  environment:
+    name: test
+  dependencies:
+    - "authenticate: [test]"
+  <<: *terragrunt-rules
+
+terragrunt:validate:prod:
+  extends: .terraform:validate
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/prod"
+    - terragrunt run-all validate
+  environment:
+    name: prod
+  dependencies:
+    - "authenticate: [prod]"
+  <<: *terragrunt-rules
+
+# build
+terragrunt:build:dev:
+  extends: .terraform:build
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/dev"
+    - terragrunt run-all plan
+  environment:
+    name: dev
+  dependencies:
+    - "authenticate: [dev]"
+  <<: *terragrunt-rules
+
+terragrunt:build:test:
+  extends: .terraform:build
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/test"
+    - terragrunt run-all plan
+  environment:
+    name: test
+  dependencies:
+    - "authenticate: [test]"
+  <<: *terragrunt-rules
+
+terragrunt:build:prod:
+  extends: .terraform:build
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/prod"
+    - terragrunt run-all plan
+  environment:
+    name: prod
+  dependencies:
+    - "authenticate: [prod]"
+  <<: *terragrunt-rules
+
+# release
+semantic:
+  extends: .release:semantic
+
+# deploy
+terragrunt:deploy:dev:
+  extends: .terraform:deploy
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/dev"
+    - terragrunt run-all apply
+  environment:
+    name: dev
+  dependencies:
+    - "authenticate: [dev]"
+
+terragrunt:deploy:test:
+  extends: .terraform:deploy
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/test"
+    - terragrunt run-all apply
+  environment:
+    name: test
+  dependencies:
+    - "authenticate: [test]"
+
+terragrunt:deploy:prod:
+  extends: .terraform:deploy
+  <<: *terragrunt-variables
+  <<: *terragrunt-script
+  script:
+    - cd "stacks/prod"
+    - terragrunt run-all apply
+  environment:
+    name: prod
+  dependencies:
+    - "authenticate: [prod]"

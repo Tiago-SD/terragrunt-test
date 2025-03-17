@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "local>sico/shared/ci-templates/renovate-ci-config#v1.14.2"
+  ]
+}

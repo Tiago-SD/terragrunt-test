@@ -1,0 +1,84 @@
+---
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.3
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --args=-diff
+        stages: ['pre-commit']
+      - id: terraform_validate
+        stages: ['pre-commit']
+      - id: terraform_providers_lock
+        args:
+          - --args=-platform=darwin_amd64
+          - --args=-platform=darwin_arm64
+          - --args=-platform=linux_amd64
+          - --args=-platform=linux_arm64
+          - --hook-config=--mode=only-check-is-current-lockfile-cross-platform
+        stages: ['pre-commit']
+      - id: terraform_docs
+        args:
+          - --args=--html=false
+          - --args=--lockfile=false
+        stages: ['pre-commit']
+      - id: terraform_tflint
+        args:
+          - --args=--format=compact
+          - --args=--only=terraform_comment_syntax
+          - --args=--only=terraform_deprecated_index
+          - --args=--only=terraform_deprecated_interpolation
+          - --args=--only=terraform_documented_outputs
+          - --args=--only=terraform_documented_variables
+          - --args=--only=terraform_module_pinned_source
+          - --args=--only=terraform_module_version
+          - --args=--only=terraform_naming_convention
+          - --args=--only=terraform_required_providers
+          - --args=--only=terraform_required_version
+          - --args=--only=terraform_standard_module_structure
+          - --args=--only=terraform_typed_variables
+          - --args=--only=terraform_unused_declarations
+          - --args=--only=terraform_unused_required_providers
+          - --args=--only=terraform_workspace_remote
+        stages: ['pre-commit']
+      - id: terraform_trivy
+        args:
+          - --args=--ignorefile=.trivyignore.yaml
+          - --args=--report=summary
+          - --args=--skip-dirs='**/.terragrunt-cache'
+        files: ^modules/
+        stages: ['pre-commit']
+      - id: terragrunt_fmt
+        stages: ['pre-commit']
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: ['commit-msg']
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.22.1
+    hooks:
+      - id: gitleaks
+        stages: ['pre-commit']
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+        stages: ['pre-commit']
+      - id: end-of-file-fixer
+        stages: ['pre-commit']
+      - id: trailing-whitespace
+        stages: ['pre-commit']
+
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 39.91.4
+    hooks:
+      - id: renovate-config-validator
+        stages: ['pre-commit']

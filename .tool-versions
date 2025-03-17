@@ -1,0 +1,7 @@
+pre-commit 3.8.0
+terraform 1.11.2
+terraform-docs 0.18.0
+tflint 0.52.0
+trivy 0.54.1
+terragrunt 0.75.10
+direnv 2.35.0
