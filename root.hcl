@@ -63,13 +63,3 @@ remote_state {
   }
 }
 
-inputs = merge(
-  {
-    tags = {
-      Owner       = "Tiago Domingues"
-      Contact     = "Tiago Domingues"
-      Project     = "Terragrunt Test"
-      Environment = local.env_name
-    }
-  }
-)

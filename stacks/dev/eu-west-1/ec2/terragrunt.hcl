@@ -19,7 +19,6 @@ locals {
 inputs = {
   instance_type          = local.instance_type
   key_name               = local.key_pair_name
-  vpc_security_group_ids = [local.ec2_sg]
   subnet_id              = local.private_subnet
 
   tags = {
